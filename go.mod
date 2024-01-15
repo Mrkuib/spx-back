@@ -7,6 +7,8 @@ require (
 	gocloud.dev v0.36.0
 )
 
+require golang.org/x/crypto v0.17.0
+
 require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect

@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"database/sql"
+	"mime/multipart"
 	"os"
 	"time"
 
@@ -24,6 +25,18 @@ type CloudFile struct {
 	Address string
 	Ctime time.Time
 	Mtime time.Time
+}
+
+type Spirit struct{
+	ID string
+	Name string
+	AuthorId string
+	Category string
+	UseCounts int
+	IsPublic int
+	Address string
+	Ctime time.Time
+	Utime time.Time
 }
 
 
@@ -78,4 +91,16 @@ func (p *Project) FileInfo(ctx context.Context, id string) (*CloudFile,error) {
 		return cloudFile,nil
 	}
 	return nil, ErrNotExist
+}
+
+// UploadFile 上传一个文件到 bucket
+func (p *Project) UploadSpirit(ctx context.Context,spirit *Spirit ,file multipart.File,header *multipart.FileHeader) error {
+	path,err := UploadFile(ctx, p, os.Getenv("SPIRIT_PATH"), file, header)
+	if err!=nil{
+		return err
+	}
+	spirit.Address=path
+	err = AddSpirit(p,spirit)
+	return err
+
 }

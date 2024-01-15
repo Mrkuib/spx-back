@@ -14,8 +14,27 @@ get "/code/:id", ctx => {
 	id := ctx.param("id")
 	cloudFile, _ := p.FileInfo(todo, id)
 	ctx.json {
+		"code":200,
+		"msg":"OK",
 		"id": ctx.param("id"),
 		"address":cloudFile.Address,
+	}
+}
+post "/upload/spirit",ctx =>{
+	name:=ctx.FormValue("name")
+	category:=ctx.FormValue("category")
+	file,header,_:=ctx.FormFile("file")
+	spirit:=&core.Spirit{
+		Name:name,
+		AuthorId :"1",
+		Category :category,
+		UseCounts:0,
+		IsPublic:0,
+	}
+	_=p.UploadSpirit(todo,spirit,file,header)
+	ctx.json {
+		"code":200,
+		"msg":"OK",
 	}
 }
 

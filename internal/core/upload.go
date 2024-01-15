@@ -20,7 +20,7 @@ func UploadFile(ctx context.Context,p *Project, blobKey string,file multipart.Fi
     ext := filepath.Ext(originalFilename)
 
 	//文件名加密
-	blobKey=blobKey+Encrypt(time.Now().String(), originalFilename)+"."+ext
+	blobKey=blobKey+Encrypt(time.Now().String(), originalFilename)+ext
 
     // 创建 blob writer	
     w, err := p.bucket.NewWriter(ctx, blobKey, nil)
@@ -41,7 +41,11 @@ func UploadFile(ctx context.Context,p *Project, blobKey string,file multipart.Fi
 
 func AddSpirit(p *Project,s *Spirit) error{
     sqlStr := "insert into spirit (name,author_id , category, use_counts, is_public, address, create_time,update_time) values (?, ?, ?, ?, ?, ?,?, ?)"
-	_, err := p.db.Exec(sqlStr, s.Name, s.AuthorId, s.Category, s.Category, s.UseCounts, s.IsPublic, s.Address,time.Now(),time.Now())
+	_, err := p.db.Exec(sqlStr, s.Name, s.AuthorId, s.Category, s.UseCounts, s.IsPublic, s.Address,time.Now(),time.Now())
+    if err != nil {
+        println(err.Error())
+        return err
+    }
 	return err
 }
 

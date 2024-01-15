@@ -6,8 +6,10 @@ import (
 	"mime/multipart"
 	"os"
 	"time"
-
+	_ "github.com/qiniu/go-cdk-driver/kodoblob"
 	"gocloud.dev/blob"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/joho/godotenv"
 )
 
 var (
@@ -46,6 +48,7 @@ type Project struct {
 }
 
 func New(ctx context.Context, conf *Config) (ret *Project, err error) {
+	_ = godotenv.Load("../.env")
 	if conf == nil {
 		conf = new(Config)
 	}
@@ -56,17 +59,20 @@ func New(ctx context.Context, conf *Config) (ret *Project, err error) {
 		driver = "mysql"
 	}
 	if dsn == "" {
-		dsn = os.Getenv("GOP_COMMUNITY_DSN")
+		dsn = os.Getenv("GOP_SPX_DSN")
 	}
 	if bus == "" {
-		bus = os.Getenv("GOP_COMMUNITY_BLOBUS")
+		bus = os.Getenv("GOP_SPX_BLOBUS")
 	}
 	bucket, err := blob.OpenBucket(ctx, bus)
 	if err != nil {
+		println(err.Error())
 		return
 	}
+	
 	db, err := sql.Open(driver, dsn)
 	if err != nil {
+		println(err.Error())
 		return
 	}
 	return &Project{bucket, db}, nil

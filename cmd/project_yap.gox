@@ -30,6 +30,18 @@ get "/asset/:id", ctx => {
     }
 }
 
+get "/list/asset/:pageIndex/:pageSize/:assetType", ctx => {
+    pageIndex := ctx.param("pageIndex")
+    pageSize := ctx.param("pageSize")
+    assetType := ctx.param("assetType")
+    result, _ := p.AssetList(todo, pageIndex, pageSize, assetType)
+    ctx.json {
+            "code":200,
+            "msg":"ok",
+            "data": result,
+    }
+}
+
 post "/project/save", ctx=>{
 	id := ctx.FormValue("id")
 	uid := ctx.FormValue("uid")

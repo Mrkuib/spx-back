@@ -3,13 +3,14 @@ package core
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"encoding/json"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	_ "github.com/qiniu/go-cdk-driver/kodoblob"
 	"gocloud.dev/blob"
 	"mime/multipart"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -24,16 +25,24 @@ type Config struct {
 }
 
 type Asset struct {
-	ID        string    `db:"id"`
-	Name      string    `db:"name"`
-	AuthorId  string    `db:"author_id"`
-	Category  string    `db:"category"`
-	IsPublic  int       `db:"is_public"`
-	Address   string    `db:"address"`
-	AssetType int       `db:"asset_type"`
-	Status    int       `db:"status"`
-	Ctime     time.Time `db:"create_time"`
-	Utime     time.Time `db:"update_time"`
+	ID        string
+	Name      string
+	AuthorId  string
+	Category  string
+	IsPublic  int
+	Address   string
+	AssetType string
+	Status    int
+	CTime     time.Time
+	UTime     time.Time
+}
+
+type PageData[T any] struct {
+	CurrentPage  int
+	TotalPages   int
+	PageSize     int
+	TotalRecords int
+	Data         []T
 }
 
 type CodeFile struct {
@@ -103,12 +112,93 @@ func (p *Project) FileInfo(ctx context.Context, id string) (*CodeFile, error) {
 func (p *Project) Asset(ctx context.Context, id string) (*Asset, error) {
 	var asset Asset
 	query := `SELECT * FROM asset WHERE id = ?`
-	err := p.db.QueryRow(query, id).Scan(&asset)
-	fmt.Print(err)
+	err := p.db.QueryRow(query, id).Scan(&asset.ID, &asset.Name, &asset.AuthorId, &asset.Category, &asset.IsPublic, &asset.Address, &asset.AssetType, &asset.Status, &asset.CTime, &asset.UTime)
+	if err != nil {
+		return nil, err
+	}
+	err = p.modifyAddress(&asset.Address)
 	if err != nil {
 		return nil, err
 	}
 	return &asset, nil
+}
+
+// modifyAddress transfers relative path to download url
+func (p *Project) modifyAddress(address *string) error {
+	var data struct {
+		Assets    map[string]string `json:"assets"`
+		IndexJson string            `json:"indexJson"`
+	}
+	if err := json.Unmarshal([]byte(*address), &data); err != nil {
+		return err
+	}
+	for key, value := range data.Assets {
+		data.Assets[key] = "prefix_url_" + value // TODO: Replace with real URL prefix
+	}
+	if data.IndexJson != "" {
+		data.IndexJson = "prefix_url_" + data.IndexJson
+	}
+	modifiedAddress, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	*address = string(modifiedAddress)
+	return nil
+}
+
+// AssetList lists assets by pageIndex, pageSize, assetType
+func (p *Project) AssetList(ctx context.Context, pageIndexParam string, pageSizeParam string, assetType string) (*PageData[Asset], error) {
+	pageIndex, err := strconv.Atoi(pageIndexParam)
+	if err != nil {
+		return nil, err
+	}
+	pageSize, err := strconv.Atoi(pageSizeParam)
+	if err != nil {
+		return nil, err
+	}
+
+	// 计算总记录数
+	var totalRecords int
+	countQuery := "SELECT COUNT(*) FROM asset WHERE asset_type = ?"
+	err = p.db.QueryRow(countQuery, assetType).Scan(&totalRecords)
+	if err != nil {
+		return nil, err
+	}
+
+	// 计算总页数
+	totalPages := totalRecords / pageSize
+	if totalRecords%pageSize > 0 {
+		totalPages++
+	}
+
+	// 计算开始获取记录的位置
+	offset := (pageIndex - 1) * pageSize
+
+	// 执行分页查询
+	query := `SELECT * FROM asset WHERE asset_type = ? LIMIT ? OFFSET ?`
+	rows, err := p.db.Query(query, assetType, pageSize, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var assets []Asset
+	for rows.Next() {
+		var asset Asset
+		err := rows.Scan(&asset.ID, &asset.Name, &asset.AuthorId, &asset.Category, &asset.IsPublic, &asset.Address, &asset.AssetType, &asset.Status, &asset.CTime, &asset.UTime)
+		if err != nil {
+			return nil, err
+		}
+		assets = append(assets, asset)
+	}
+
+	return &PageData[Asset]{
+		CurrentPage:  pageIndex,
+		TotalPages:   totalPages,
+		PageSize:     pageSize,
+		TotalRecords: totalRecords,
+		Data:         assets,
+	}, nil
 }
 
 func (p *Project) SaveProject(ctx context.Context, codeFile *CodeFile, file multipart.File, header *multipart.FileHeader) (*CodeFile, error) {

@@ -3,13 +3,14 @@ package core
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/joho/godotenv"
+	_ "github.com/qiniu/go-cdk-driver/kodoblob"
+	"gocloud.dev/blob"
 	"mime/multipart"
 	"os"
 	"time"
-	_ "github.com/qiniu/go-cdk-driver/kodoblob"
-	"gocloud.dev/blob"
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/joho/godotenv"
 )
 
 var (
@@ -22,26 +23,27 @@ type Config struct {
 	BlobUS string // blob URL scheme
 }
 
-type Spirit struct{
-	ID string
-	Name string
-	AuthorId string
-	Category string
-	UseCounts int
-	IsPublic int
-	Address string
-	Ctime time.Time
-	Utime time.Time
-}
-type CodeFile struct{
-	ID string
-	Name string
-	AuthorId string
-	Address string
-	Ctime time.Time
-	Utime time.Time
+type Asset struct {
+	ID        string    `db:"id"`
+	Name      string    `db:"name"`
+	AuthorId  string    `db:"author_id"`
+	Category  string    `db:"category"`
+	IsPublic  int       `db:"is_public"`
+	Address   string    `db:"address"`
+	AssetType int       `db:"asset_type"`
+	Status    int       `db:"status"`
+	Ctime     time.Time `db:"create_time"`
+	Utime     time.Time `db:"update_time"`
 }
 
+type CodeFile struct {
+	ID       string
+	Name     string
+	AuthorId string
+	Address  string
+	Ctime    time.Time
+	Utime    time.Time
+}
 
 type Project struct {
 	bucket *blob.Bucket
@@ -70,7 +72,7 @@ func New(ctx context.Context, conf *Config) (ret *Project, err error) {
 		println(err.Error())
 		return
 	}
-	
+
 	db, err := sql.Open(driver, dsn)
 	if err != nil {
 		println(err.Error())
@@ -79,57 +81,57 @@ func New(ctx context.Context, conf *Config) (ret *Project, err error) {
 	return &Project{bucket, db}, nil
 }
 
-
 // Find file address from db
-func (p *Project) FileInfo(ctx context.Context, id string) (*CodeFile,error) {
+func (p *Project) FileInfo(ctx context.Context, id string) (*CodeFile, error) {
 	if id != "" {
 		var address string
-    	query := "SELECT address FROM project WHERE id = ?"
-    	err := p.db.QueryRow(query, id).Scan(&address)
-    	if err != nil {
-        	return nil, err
-    	}
+		query := "SELECT address FROM project WHERE id = ?"
+		err := p.db.QueryRow(query, id).Scan(&address)
+		if err != nil {
+			return nil, err
+		}
 		cloudFile := &CodeFile{
-			ID: id,
+			ID:      id,
 			Address: address,
 		}
-		return cloudFile,nil
+		return cloudFile, nil
 	}
 	return nil, ErrNotExist
 }
 
-// Upload spirit file to cloud
-func (p *Project) UploadSpirit(ctx context.Context,spirit *Spirit ,file multipart.File,header *multipart.FileHeader) error {
-	path,err := UploadFile(ctx, p, os.Getenv("SPIRIT_PATH"), file, header)
-	if err!=nil{
-		return err
+// Asset returns an Asset.
+func (p *Project) Asset(ctx context.Context, id string) (*Asset, error) {
+	var asset Asset
+	query := `SELECT * FROM asset WHERE id = ?`
+	err := p.db.QueryRow(query, id).Scan(&asset)
+	fmt.Print(err)
+	if err != nil {
+		return nil, err
 	}
-	spirit.Address=path
-	err = AddSpirit(p,spirit)
-	return err
+	return &asset, nil
 }
 
-func (p *Project) SaveProject(ctx context.Context,codeFile *CodeFile ,file multipart.File,header *multipart.FileHeader) (*CodeFile,error) {
-	if codeFile.ID==""{
-		path,err := UploadFile(ctx, p, os.Getenv("PROJECT_PATH"), file, header)
-		if err!=nil{
-			return nil,err
+func (p *Project) SaveProject(ctx context.Context, codeFile *CodeFile, file multipart.File, header *multipart.FileHeader) (*CodeFile, error) {
+	if codeFile.ID == "" {
+		path, err := UploadFile(ctx, p, os.Getenv("PROJECT_PATH"), file, header)
+		if err != nil {
+			return nil, err
 		}
-		codeFile.Address=path
-		codeFile.ID,err = AddProject(p,codeFile)
-		return codeFile,err
-	}else{
-		address:=GetProjectAddress(codeFile.ID,p)
-		err:=p.bucket.Delete(ctx,address)
-		if err!=nil {
-			return nil,err
+		codeFile.Address = path
+		codeFile.ID, err = AddProject(p, codeFile)
+		return codeFile, err
+	} else {
+		address := GetProjectAddress(codeFile.ID, p)
+		err := p.bucket.Delete(ctx, address)
+		if err != nil {
+			return nil, err
 		}
-		path,err := UploadFile(ctx, p, os.Getenv("PROJECT_PATH"), file, header)
-		if err!=nil{
-			return nil,err
+		path, err := UploadFile(ctx, p, os.Getenv("PROJECT_PATH"), file, header)
+		if err != nil {
+			return nil, err
 		}
-		codeFile.Address=path
-		return codeFile,UpdateProject(p,codeFile)
+		codeFile.Address = path
+		return codeFile, UpdateProject(p, codeFile)
 	}
-	
+
 }

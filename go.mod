@@ -1,6 +1,6 @@
 module github.com/Mrkuib/spx-back
 
-go 1.19
+go 1.21
 
 require (
 	github.com/goplus/yap v0.6.0 //gop:class

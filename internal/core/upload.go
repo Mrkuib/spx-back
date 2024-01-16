@@ -13,40 +13,30 @@ import (
 )
 
 // Upload file to cloud
-func UploadFile(ctx context.Context,p *Project, blobKey string,file multipart.File,header *multipart.FileHeader) (string,error) {
-    originalFilename := header.Filename
+func UploadFile(ctx context.Context, p *Project, blobKey string, file multipart.File, header *multipart.FileHeader) (string, error) {
+	originalFilename := header.Filename
 
-    // 提取文件扩展名
-    ext := filepath.Ext(originalFilename)
+	// 提取文件扩展名
+	ext := filepath.Ext(originalFilename)
 
 	//文件名加密
-	blobKey=blobKey+Encrypt(time.Now().String(), originalFilename)+ext
+	blobKey = blobKey + Encrypt(time.Now().String(), originalFilename) + ext
 
-    // 创建 blob writer	
-    w, err := p.bucket.NewWriter(ctx, blobKey, nil)
-    if err != nil {
-        return "",err
-    }
-    defer w.Close()
+	// 创建 blob writer
+	w, err := p.bucket.NewWriter(ctx, blobKey, nil)
+	if err != nil {
+		return "", err
+	}
+	defer w.Close()
 
-    // 将文件内容复制到 blob writer
-    _, err = io.Copy(w, file)
-    if err != nil {
-        return "",err
-    }
+	// 将文件内容复制到 blob writer
+	_, err = io.Copy(w, file)
+	if err != nil {
+		return "", err
+	}
 
-    // 关闭 writer 提交文件
-    return blobKey,w.Close()
-}
-
-func AddSpirit(p *Project,s *Spirit) error{
-    sqlStr := "insert into spirit (name,author_id , category, use_counts, is_public, address, create_time,update_time) values (?, ?, ?, ?, ?, ?,?, ?)"
-	_, err := p.db.Exec(sqlStr, s.Name, s.AuthorId, s.Category, s.UseCounts, s.IsPublic, s.Address,time.Now(),time.Now())
-    if err != nil {
-        println(err.Error())
-        return err
-    }
-	return err
+	// 关闭 writer 提交文件
+	return blobKey, w.Close()
 }
 
 func Encrypt(salt, password string) string {
@@ -54,34 +44,34 @@ func Encrypt(salt, password string) string {
 	return fmt.Sprintf("%x", string(dk))
 }
 
-func AddProject(p *Project,c *CodeFile) (string,error){
-    sqlStr := "insert into project (name,author_id , address, create_time,update_time) values (?, ?, ?, ?, ?)"
-	res, err := p.db.Exec(sqlStr, c.Name, c.AuthorId, c.Address,time.Now(),time.Now())
-    if err != nil {
-        println(err.Error())
-        return "",err
-    }
-    idInt, err := res.LastInsertId()
-	return strconv.Itoa(int(idInt)),err
+func AddProject(p *Project, c *CodeFile) (string, error) {
+	sqlStr := "insert into project (name,author_id , address, create_time,update_time) values (?, ?, ?, ?, ?)"
+	res, err := p.db.Exec(sqlStr, c.Name, c.AuthorId, c.Address, time.Now(), time.Now())
+	if err != nil {
+		println(err.Error())
+		return "", err
+	}
+	idInt, err := res.LastInsertId()
+	return strconv.Itoa(int(idInt)), err
 }
 
-func GetProjectAddress(id string,p *Project) string{
-    var address string
-    query := "SELECT address FROM project WHERE id = ?"
-    err := p.db.QueryRow(query, id).Scan(&address)
-    if err != nil {
-    	return ""
-    }
-    return address
+func GetProjectAddress(id string, p *Project) string {
+	var address string
+	query := "SELECT address FROM project WHERE id = ?"
+	err := p.db.QueryRow(query, id).Scan(&address)
+	if err != nil {
+		return ""
+	}
+	return address
 }
 
-func UpdateProject(p *Project,c *CodeFile) error{
-    stmt, err := p.db.Prepare("UPDATE project SET name = ?, address = ? WHERE id = ?")
-    if err != nil {
-        return err
-    }
-    defer stmt.Close()
+func UpdateProject(p *Project, c *CodeFile) error {
+	stmt, err := p.db.Prepare("UPDATE project SET name = ?, address = ? WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
 
-    _, err = stmt.Exec(c.Name, c.Address, c.ID)
-    return err
+	_, err = stmt.Exec(c.Name, c.Address, c.ID)
+	return err
 }

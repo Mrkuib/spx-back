@@ -6,14 +6,14 @@ import (
 	"io"
 	"mime/multipart"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"golang.org/x/crypto/scrypt"
 )
 
-// UploadFile 上传一个文件到 bucket
+// Upload file to cloud
 func UploadFile(ctx context.Context,p *Project, blobKey string,file multipart.File,header *multipart.FileHeader) (string,error) {
-	// 从 header 中获取原始文件名
     originalFilename := header.Filename
 
     // 提取文件扩展名
@@ -52,4 +52,36 @@ func AddSpirit(p *Project,s *Spirit) error{
 func Encrypt(salt, password string) string {
 	dk, _ := scrypt.Key([]byte(password), []byte(salt), 32768, 8, 1, 32)
 	return fmt.Sprintf("%x", string(dk))
+}
+
+func AddProject(p *Project,c *CodeFile) (string,error){
+    sqlStr := "insert into project (name,author_id , address, create_time,update_time) values (?, ?, ?, ?, ?)"
+	res, err := p.db.Exec(sqlStr, c.Name, c.AuthorId, c.Address,time.Now(),time.Now())
+    if err != nil {
+        println(err.Error())
+        return "",err
+    }
+    idInt, err := res.LastInsertId()
+	return strconv.Itoa(int(idInt)),err
+}
+
+func GetProjectAddress(id string,p *Project) string{
+    var address string
+    query := "SELECT address FROM project WHERE id = ?"
+    err := p.db.QueryRow(query, id).Scan(&address)
+    if err != nil {
+    	return ""
+    }
+    return address
+}
+
+func UpdateProject(p *Project,c *CodeFile) error{
+    stmt, err := p.db.Prepare("UPDATE project SET name = ?, address = ? WHERE id = ?")
+    if err != nil {
+        return err
+    }
+    defer stmt.Close()
+
+    _, err = stmt.Exec(c.Name, c.Address, c.ID)
+    return err
 }

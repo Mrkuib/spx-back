@@ -40,6 +40,14 @@ type Spirit struct{
 	Ctime time.Time
 	Utime time.Time
 }
+type CodeFile struct{
+	ID string
+	Name string
+	AuthorId string
+	Address string
+	Ctime time.Time
+	Utime time.Time
+}
 
 
 type Project struct {
@@ -99,7 +107,7 @@ func (p *Project) FileInfo(ctx context.Context, id string) (*CloudFile,error) {
 	return nil, ErrNotExist
 }
 
-// UploadFile 上传一个文件到 bucket
+// Upload spirit file to cloud
 func (p *Project) UploadSpirit(ctx context.Context,spirit *Spirit ,file multipart.File,header *multipart.FileHeader) error {
 	path,err := UploadFile(ctx, p, os.Getenv("SPIRIT_PATH"), file, header)
 	if err!=nil{
@@ -108,5 +116,29 @@ func (p *Project) UploadSpirit(ctx context.Context,spirit *Spirit ,file multipar
 	spirit.Address=path
 	err = AddSpirit(p,spirit)
 	return err
+}
 
+func (p *Project) SaveProject(ctx context.Context,codeFile *CodeFile ,file multipart.File,header *multipart.FileHeader) (*CodeFile,error) {
+	if codeFile.ID==""{
+		path,err := UploadFile(ctx, p, os.Getenv("PROJECT_PATH"), file, header)
+		if err!=nil{
+			return nil,err
+		}
+		codeFile.Address=path
+		codeFile.ID,err = AddProject(p,codeFile)
+		return codeFile,err
+	}else{
+		address:=GetProjectAddress(codeFile.ID,p)
+		err:=p.bucket.Delete(ctx,address)
+		if err!=nil {
+			return nil,err
+		}
+		path,err := UploadFile(ctx, p, os.Getenv("PROJECT_PATH"), file, header)
+		if err!=nil{
+			return nil,err
+		}
+		codeFile.Address=path
+		return codeFile,UpdateProject(p,codeFile)
+	}
+	
 }

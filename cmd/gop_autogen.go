@@ -40,11 +40,29 @@ func (this *project) MainEntry() {
 		ctx.Json__1(map[string]interface {
 		}{"code": 200, "msg": "OK"})
 	})
+//line cmd/project_yap.gox:41:1
+	this.Post("/project/save", func(ctx *yap.Context) {
 //line cmd/project_yap.gox:42:1
-	conf := &core.Config{}
+		id := ctx.FormValue("id")
 //line cmd/project_yap.gox:43:1
-	this.p, _ = core.New(todo, conf)
+		uid := ctx.FormValue("uid")
+//line cmd/project_yap.gox:44:1
+		name := ctx.FormValue("name")
 //line cmd/project_yap.gox:45:1
+		file, header, _ := ctx.FormFile("file")
+//line cmd/project_yap.gox:46:1
+		codeFile := &core.CodeFile{ID: id, Name: name, AuthorId: uid}
+//line cmd/project_yap.gox:51:1
+		res, _ := this.p.SaveProject(todo, codeFile, file, header)
+//line cmd/project_yap.gox:52:1
+		ctx.Json__1(map[string]interface {
+		}{"code": 200, "msg": "ok", "data": map[string]string{"id": res.ID, "address": res.Address}})
+	})
+//line cmd/project_yap.gox:60:1
+	conf := &core.Config{}
+//line cmd/project_yap.gox:61:1
+	this.p, _ = core.New(todo, conf)
+//line cmd/project_yap.gox:63:1
 	this.Run__1(":8080")
 }
 func main() {

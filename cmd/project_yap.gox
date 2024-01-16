@@ -38,6 +38,24 @@ post "/upload/spirit",ctx =>{
 	}
 }
 
+post "/project/save", ctx=>{
+	id := ctx.FormValue("id")
+	uid := ctx.FormValue("uid")
+	name:=ctx.FormValue("name") 
+	file,header,_:=ctx.FormFile("file")
+	codeFile:=&core.CodeFile{
+		ID:id,
+		Name:name,
+		AuthorId :uid,
+	}
+	res,_ := p.SaveProject(todo,codeFile,file,header)
+	ctx.json {
+		"code":200,
+		"msg":"ok",
+		"data":{"id":res.ID,"address":res.Address,},
+	}
+}
+
 
 conf := &core.Config{}
 p, _ = core.New(todo, conf)

@@ -22,13 +22,6 @@ type Config struct {
 	BlobUS string // blob URL scheme
 }
 
-type CloudFile struct {
-	ID    string
-	Address string
-	Ctime time.Time
-	Mtime time.Time
-}
-
 type Spirit struct{
 	ID string
 	Name string
@@ -88,17 +81,15 @@ func New(ctx context.Context, conf *Config) (ret *Project, err error) {
 
 
 // Find file address from db
-func (p *Project) FileInfo(ctx context.Context, id string) (*CloudFile,error) {
+func (p *Project) FileInfo(ctx context.Context, id string) (*CodeFile,error) {
 	if id != "" {
 		var address string
-		// table need fill
-		//TODO
-    	query := "SELECT address FROM table WHERE id = ?"
+    	query := "SELECT address FROM project WHERE id = ?"
     	err := p.db.QueryRow(query, id).Scan(&address)
     	if err != nil {
         	return nil, err
     	}
-		cloudFile := &CloudFile{
+		cloudFile := &CodeFile{
 			ID: id,
 			Address: address,
 		}

@@ -10,14 +10,13 @@ var (
 
 todo := context.TODO()
 
-get "/code/:id", ctx => {
+get "/project/:id", ctx => {
 	id := ctx.param("id")
-	cloudFile, _ := p.FileInfo(todo, id)
+	res, _ := p.FileInfo(todo, id)
 	ctx.json {
 		"code":200,
 		"msg":"OK",
-		"id": ctx.param("id"),
-		"address":cloudFile.Address,
+		"data":{"id":res.ID,"address":res.Address,},
 	}
 }
 post "/upload/spirit",ctx =>{

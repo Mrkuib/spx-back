@@ -44,40 +44,34 @@ func (this *project) MainEntry() {
 //line cmd/project_yap.gox:36:1
 		assetType := ctx.Param("assetType")
 //line cmd/project_yap.gox:37:1
-		result, err := this.p.AssetList(todo, pageIndex, pageSize, assetType)
+		result, _ := this.p.AssetList(todo, pageIndex, pageSize, assetType)
 //line cmd/project_yap.gox:38:1
-		if err != nil {
-//line cmd/project_yap.gox:39:1
-			ctx.Json__1(map[string]interface {
-			}{"code": 500, "msg": "err", "data": err.Error()})
-		}
-//line cmd/project_yap.gox:45:1
 		ctx.Json__1(map[string]interface {
 		}{"code": 200, "msg": "ok", "data": result})
 	})
-//line cmd/project_yap.gox:52:1
+//line cmd/project_yap.gox:45:1
 	this.Post("/project/save", func(ctx *yap.Context) {
-//line cmd/project_yap.gox:53:1
+//line cmd/project_yap.gox:46:1
 		id := ctx.FormValue("id")
-//line cmd/project_yap.gox:54:1
+//line cmd/project_yap.gox:47:1
 		uid := ctx.FormValue("uid")
-//line cmd/project_yap.gox:55:1
+//line cmd/project_yap.gox:48:1
 		name := ctx.FormValue("name")
-//line cmd/project_yap.gox:56:1
+//line cmd/project_yap.gox:49:1
 		file, header, _ := ctx.FormFile("file")
-//line cmd/project_yap.gox:57:1
+//line cmd/project_yap.gox:50:1
 		codeFile := &core.CodeFile{ID: id, Name: name, AuthorId: uid}
-//line cmd/project_yap.gox:62:1
+//line cmd/project_yap.gox:55:1
 		res, _ := this.p.SaveProject(todo, codeFile, file, header)
-//line cmd/project_yap.gox:63:1
+//line cmd/project_yap.gox:56:1
 		ctx.Json__1(map[string]interface {
 		}{"code": 200, "msg": "ok", "data": map[string]string{"id": res.ID, "address": res.Address}})
 	})
-//line cmd/project_yap.gox:71:1
+//line cmd/project_yap.gox:64:1
 	conf := &core.Config{}
-//line cmd/project_yap.gox:72:1
+//line cmd/project_yap.gox:65:1
 	this.p, _ = core.New(todo, conf)
-//line cmd/project_yap.gox:74:1
+//line cmd/project_yap.gox:67:1
 	this.Run__1(":8080")
 }
 func main() {

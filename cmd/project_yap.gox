@@ -34,7 +34,7 @@ get "/list/asset/:pageIndex/:pageSize/:assetType", ctx => {
     pageIndex := ctx.param("pageIndex")
     pageSize := ctx.param("pageSize")
     assetType := ctx.param("assetType")
-    result, err := p.AssetList(todo, pageIndex, pageSize, assetType)
+    result, _ := p.AssetList(todo, pageIndex, pageSize, assetType)
     ctx.json {
             "code":200,
             "msg":"ok",

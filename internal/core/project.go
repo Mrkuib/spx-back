@@ -4,15 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
+	"github.com/Mrkuib/spx-back/internal/common"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	_ "github.com/qiniu/go-cdk-driver/kodoblob"
 	"gocloud.dev/blob"
 	"mime/multipart"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -37,12 +35,6 @@ type Asset struct {
 	Status    int
 	CTime     time.Time
 	UTime     time.Time
-}
-
-type PageData[T any] struct {
-	TotalPages int
-	TotalCount int
-	Data       []T
 }
 
 type CodeFile struct {
@@ -110,9 +102,7 @@ func (p *Project) FileInfo(ctx context.Context, id string) (*CodeFile, error) {
 
 // Asset returns an Asset.
 func (p *Project) Asset(ctx context.Context, id string) (*Asset, error) {
-	var asset Asset
-	query := `SELECT * FROM asset WHERE id = ?`
-	err := p.db.QueryRow(query, id).Scan(&asset.ID, &asset.Name, &asset.AuthorId, &asset.Category, &asset.IsPublic, &asset.Address, &asset.AssetType, &asset.Status, &asset.CTime, &asset.UTime)
+	asset, err := common.QuerySelectById[Asset](p.db, id)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +110,23 @@ func (p *Project) Asset(ctx context.Context, id string) (*Asset, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &asset, nil
+	return asset, nil
+}
+
+// AssetList list assets
+func (p *Project) AssetList(ctx context.Context, pageIndex string, pageSize string, assetType string) (*common.Pagination[Asset], error) {
+	wheres := map[string]interface{}{"asset_type": assetType}
+	pagination, err := common.QueryByPage[Asset](p.db, pageIndex, pageSize, wheres)
+	for i := range pagination.Data {
+		err := p.modifyAddress(&pagination.Data[i].Address)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return pagination, nil
 }
 
 // modifyAddress transfers relative path to download url
@@ -144,91 +150,6 @@ func (p *Project) modifyAddress(address *string) error {
 	}
 	*address = string(modifiedAddress)
 	return nil
-}
-
-// AssetList list assets
-func (p *Project) AssetList(ctx context.Context, pageIndexParam string, pageSizeParam string, scanFunc string) (*Pagination[Asset], error) {
-	pageIndex, err := strconv.Atoi(pageIndexParam)
-	if err != nil {
-		return nil, err
-	}
-	pageSize, err := strconv.Atoi(pageSizeParam)
-	if err != nil {
-		return nil, err
-	}
-	wheres := map[string]interface{}{"asset_type": scanFunc}
-	pagination, err := queryByPage[Asset](p.db, pageIndex, pageSize, "asset", assetScan, wheres)
-	if err != nil {
-		return nil, err
-	}
-	return pagination, nil
-}
-
-func assetScan(rows *sql.Rows) (Asset, error) {
-	var asset Asset
-	err := rows.Scan(&asset.ID, &asset.Name, &asset.AuthorId, &asset.Category, &asset.IsPublic, &asset.Address, &asset.AssetType, &asset.Status, &asset.CTime, &asset.UTime)
-	if err != nil {
-		return Asset{}, err
-	}
-	return asset, nil
-}
-
-type Pagination[T any] struct {
-	TotalCount int
-	TotalPage  int
-	Data       []T
-}
-
-// queryByPage lists T from tableName start from pageIndex, includes pageSize records, and construct where condition by 'where' param
-func queryByPage[T any](db *sql.DB, pageIndex int, pageSize int, tableName string, where func(*sql.Rows) (T, error), filters map[string]interface{}) (*Pagination[T], error) {
-	// 计算开始获取记录的位置
-	offset := (pageIndex - 1) * pageSize
-
-	// 构建 WHERE 子句
-	var whereClauses []string
-	var args []interface{}
-	for col, val := range filters {
-		whereClauses = append(whereClauses, fmt.Sprintf("%s = ?", col))
-		args = append(args, val)
-	}
-	whereClause := ""
-	if len(whereClauses) > 0 {
-		whereClause = " WHERE " + strings.Join(whereClauses, " AND ")
-	}
-
-	// 查询总记录数
-	var totalCount int
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s%s", tableName, whereClause)
-	argsForCount := append([]interface{}{}, args...) // 复制 args 用于总数查询
-	err := db.QueryRow(countQuery, argsForCount...).Scan(&totalCount)
-	if err != nil {
-		return nil, err
-	}
-
-	// 计算总页数
-	totalPage := (totalCount + pageSize - 1) / pageSize
-
-	// 执行分页查询
-	query := fmt.Sprintf("SELECT * FROM %s%s LIMIT ?, ?", tableName, whereClause)
-	argsForQuery := append(args, offset, pageSize) // 添加 LIMIT 参数
-	rows, err := db.Query(query, argsForQuery...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var data []T
-	for rows.Next() {
-		item, err := where(rows)
-		if err != nil {
-			return nil, err
-		}
-		data = append(data, item)
-	}
-	return &Pagination[T]{
-		TotalCount: totalCount,
-		TotalPage:  totalPage,
-		Data:       data,
-	}, nil
 }
 
 func (p *Project) SaveProject(ctx context.Context, codeFile *CodeFile, file multipart.File, header *multipart.FileHeader) (*CodeFile, error) {

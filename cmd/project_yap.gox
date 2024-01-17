@@ -1,6 +1,6 @@
 import (
 	"context"
-
+	"os"
 	"github.com/Mrkuib/spx-back/internal/core"
 )
 
@@ -16,7 +16,7 @@ get "/project/:id", ctx => {
 	ctx.json {
 		"code":200,
 		"msg":"OK",
-		"data":{"id":res.ID,"address":res.Address,},
+		"data":{"id":res.ID,"address":os.Getenv("QINIU_PATH")+res.Address,},
 	}
 }
 
@@ -56,7 +56,7 @@ post "/project/save", ctx=>{
 	ctx.json {
 		"code":200,
 		"msg":"ok",
-		"data":{"id":res.ID,"address":res.Address,},
+		"data":{"id":res.ID,"address":os.Getenv("QINIU_PATH")+res.Address,},
 	}
 }
 

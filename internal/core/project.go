@@ -139,10 +139,10 @@ func (p *Project) modifyAddress(address *string) error {
 		return err
 	}
 	for key, value := range data.Assets {
-		data.Assets[key] = "prefix_url_" + value // TODO: Replace with real URL prefix
+		data.Assets[key] = os.Getenv("QINIU_PATH") + value // TODO: Replace with real URL prefix
 	}
 	if data.IndexJson != "" {
-		data.IndexJson = "prefix_url_" + data.IndexJson
+		data.IndexJson = os.Getenv("QINIU_PATH") + data.IndexJson
 	}
 	modifiedAddress, err := json.Marshal(data)
 	if err != nil {

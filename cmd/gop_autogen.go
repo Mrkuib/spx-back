@@ -1,16 +1,16 @@
 package main
 
 import (
+	"os"
+	"github.com/goplus/yap"
 	"context"
 	"github.com/Mrkuib/spx-back/internal/core"
-	"github.com/goplus/yap"
 )
 
 type project struct {
 	yap.App
 	p *core.Project
 }
-
 //line cmd/project_yap.gox:11
 func (this *project) MainEntry() {
 //line cmd/project_yap.gox:11:1
@@ -23,7 +23,7 @@ func (this *project) MainEntry() {
 		res, _ := this.p.FileInfo(todo, id)
 //line cmd/project_yap.gox:16:1
 		ctx.Json__1(map[string]interface {
-		}{"code": 200, "msg": "OK", "data": map[string]string{"id": res.ID, "address": res.Address}})
+		}{"code": 200, "msg": "OK", "data": map[string]string{"id": res.ID, "address": os.Getenv("QINIU_PATH") + res.Address}})
 	})
 //line cmd/project_yap.gox:23:1
 	this.Get("/asset/:id", func(ctx *yap.Context) {
@@ -65,7 +65,7 @@ func (this *project) MainEntry() {
 		res, _ := this.p.SaveProject(todo, codeFile, file, header)
 //line cmd/project_yap.gox:56:1
 		ctx.Json__1(map[string]interface {
-		}{"code": 200, "msg": "ok", "data": map[string]string{"id": res.ID, "address": res.Address}})
+		}{"code": 200, "msg": "ok", "data": map[string]string{"id": res.ID, "address": os.Getenv("QINIU_PATH") + res.Address}})
 	})
 //line cmd/project_yap.gox:64:1
 	conf := &core.Config{}

@@ -4,14 +4,24 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"mime/multipart"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"github.com/Mrkuib/spx-back/internal/common"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	_ "github.com/qiniu/go-cdk-driver/kodoblob"
 	"gocloud.dev/blob"
-	"mime/multipart"
-	"os"
-	"time"
+	"golang.org/x/mod/modfile"
+	"golang.org/x/tools/imports"
 )
 
 var (
@@ -50,6 +60,13 @@ type Project struct {
 	bucket *blob.Bucket
 	db     *sql.DB
 }
+
+type FmtResponse struct {
+	Body  string
+	Error string
+}
+
+
 
 func New(ctx context.Context, conf *Config) (ret *Project, err error) {
 	_ = godotenv.Load("../.env")
@@ -174,5 +191,104 @@ func (p *Project) SaveProject(ctx context.Context, codeFile *CodeFile, file mult
 		codeFile.Address = path
 		return codeFile, UpdateProject(p, codeFile)
 	}
+}
 
+
+func (p *Project)CodeFmt(ctx context.Context,body,fiximport string) (res *FmtResponse){
+	
+	fs, err := splitFiles([]byte(body))
+	if err != nil {
+		res=&FmtResponse{
+			Body: "",
+			Error: err.Error(),
+		}
+		return
+	}
+
+	fixImports := fiximport != ""
+	for _, f := range fs.files {
+		switch {
+		case path.Ext(f) == ".go":
+			var out []byte
+			var err error
+			in := fs.Data(f)
+			if fixImports {
+				// TODO: pass options to imports.Process so it
+				// can find symbols in sibling files.
+				out, err = imports.Process(f, in, nil)
+			} else {
+				var tmpDir string
+				tmpDir, err = os.MkdirTemp("", "gopformat")
+				if err != nil {
+					res=&FmtResponse{
+						Body: "",
+						Error: err.Error(),
+					}
+					return
+				}
+				defer os.RemoveAll(tmpDir)
+				tmpGopFile := filepath.Join(tmpDir, "prog.gop")
+				if err = os.WriteFile(tmpGopFile, in, 0644); err != nil {
+					res=&FmtResponse{
+						Body: "",
+						Error: err.Error(),
+					}
+					return
+				}
+				cmd := exec.Command("gop", "fmt", "-smart", tmpGopFile)
+				//gop fmt returns error result in stdout, so we do not need to handle stderr
+				//err is to check gop fmt return code
+				var fmtErr []byte
+				fmtErr, err = cmd.Output()
+				if err != nil {
+					res=&FmtResponse{
+						Body: "",
+						Error: strings.Replace(string(fmtErr), tmpGopFile, "prog.gop", -1),
+					}
+					return
+				}
+				out, err = ioutil.ReadFile(tmpGopFile)
+				if err != nil {
+					err = errors.New("interval error when formatting gop code")
+				}
+			}
+			if err != nil {
+				errMsg := err.Error()
+				if !fixImports {
+					// Unlike imports.Process, format.Source does not prefix
+					// the error with the file path. So, do it ourselves here.
+					errMsg = fmt.Sprintf("%v:%v", f, errMsg)
+				}
+				res=&FmtResponse{
+					Body: "",
+					Error: errMsg,
+				}
+				return
+			}
+			fs.AddFile(f, out)
+		case path.Base(f) == "go.mod":
+			out, err := formatGoMod(f, fs.Data(f))
+			if err != nil {
+				res=&FmtResponse{
+					Body: "",
+					Error: err.Error(),
+				}
+				return
+			}
+			fs.AddFile(f, out)
+		}
+	}
+	res=&FmtResponse{
+		Body: string(fs.Format()),
+		Error: "",
+	}
+	return
+}
+
+func formatGoMod(file string, data []byte) ([]byte, error) {
+	f, err := modfile.Parse(file, data, nil)
+	if err != nil {
+		return nil, err
+	}
+	return f.Format()
 }

@@ -45,7 +45,7 @@ func Encrypt(salt, password string) string {
 }
 
 func AddProject(p *Project, c *CodeFile) (string, error) {
-	sqlStr := "insert into project (name,author_id , address, create_time,update_time) values (?, ?, ?, ?, ?)"
+	sqlStr := "insert into project (name,author_id , address, c_time,u_time) values (?, ?, ?, ?, ?)"
 	res, err := p.db.Exec(sqlStr, c.Name, c.AuthorId, c.Address, time.Now(), time.Now())
 	if err != nil {
 		println(err.Error())

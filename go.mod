@@ -1,6 +1,6 @@
 module github.com/Mrkuib/spx-back
 
-go 1.21
+go 1.19
 
 require (
 	github.com/goplus/yap v0.6.0 //gop:class
@@ -12,6 +12,8 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/qiniu/go-cdk-driver v0.1.0
 	golang.org/x/crypto v0.17.0
+	golang.org/x/mod v0.12.0
+	golang.org/x/tools v0.12.0
 )
 
 require (

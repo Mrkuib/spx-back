@@ -68,10 +68,26 @@ func (this *project) MainEntry() {
 		}{"code": 200, "msg": "ok", "data": map[string]string{"id": res.ID, "address": os.Getenv("QINIU_PATH") + res.Address}})
 	})
 //line cmd/project_yap.gox:64:1
-	conf := &core.Config{}
+	this.Post("/project/fmt", func(ctx *yap.Context) {
 //line cmd/project_yap.gox:65:1
-	this.p, _ = core.New(todo, conf)
+		ctx.ResponseWriter.Header().Set("Access-Control-Allow-Origin", "*")
+//line cmd/project_yap.gox:66:1
+		ctx.ResponseWriter.Header().Set("Content-Type", "application/json")
 //line cmd/project_yap.gox:67:1
+		body := ctx.FormValue("body")
+//line cmd/project_yap.gox:68:1
+		imports := ctx.FormValue("import")
+//line cmd/project_yap.gox:69:1
+		res := this.p.CodeFmt(todo, body, imports)
+//line cmd/project_yap.gox:70:1
+		ctx.Json__1(map[string]interface {
+		}{"code": 200, "msg": "ok", "data": res})
+	})
+//line cmd/project_yap.gox:78:1
+	conf := &core.Config{}
+//line cmd/project_yap.gox:79:1
+	this.p, _ = core.New(todo, conf)
+//line cmd/project_yap.gox:81:1
 	this.Run__1(":8080")
 }
 func main() {

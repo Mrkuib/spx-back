@@ -61,6 +61,20 @@ post "/project/save", ctx=>{
 }
 
 
+post "/project/fmt", ctx=>{
+	ctx.ResponseWriter.Header().Set("Access-Control-Allow-Origin", "*")
+	ctx.ResponseWriter.Header().Set("Content-Type", "application/json")
+	body := ctx.FormValue("body")
+	imports := ctx.FormValue("import")
+	res := p.CodeFmt(todo,body,imports)
+	ctx.json {
+		"code":200,
+		"msg":"ok",
+		"data":res,
+	}
+}
+
+
 conf := &core.Config{}
 p, _ = core.New(todo, conf)
 

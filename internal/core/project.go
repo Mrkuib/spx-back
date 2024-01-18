@@ -61,10 +61,16 @@ type Project struct {
 	db     *sql.DB
 }
 
-type FmtResponse struct {
-	Body  string
-	Error string
+type FormatError struct {
+	Column int
+	Line   int
+	Msg    string
 }
+type FormatResponse struct {
+	Body  string
+	Error FormatError
+}
+
 
 func New(ctx context.Context, conf *Config) (ret *Project, err error) {
 	_ = godotenv.Load("../.env")
@@ -199,13 +205,15 @@ func (p *Project) SaveProject(ctx context.Context, codeFile *CodeFile, file mult
 	}
 }
 
-func (p *Project) CodeFmt(ctx context.Context, body, fiximport string) (res *FmtResponse) {
 
+func (p *Project)CodeFmt(ctx context.Context,body,fiximport string) (res *FormatResponse){
+	
 	fs, err := splitFiles([]byte(body))
 	if err != nil {
-		res = &FmtResponse{
-			Body:  "",
-			Error: err.Error(),
+		fmtErr:=ExtractErrorInfo(err.Error())
+		res=&FormatResponse{
+			Body: "",
+			Error: fmtErr,
 		}
 		return
 	}
@@ -225,18 +233,20 @@ func (p *Project) CodeFmt(ctx context.Context, body, fiximport string) (res *Fmt
 				var tmpDir string
 				tmpDir, err = os.MkdirTemp("", "gopformat")
 				if err != nil {
-					res = &FmtResponse{
-						Body:  "",
-						Error: err.Error(),
+					fmtErr:=ExtractErrorInfo(err.Error())
+					res=&FormatResponse{
+						Body: "",
+						Error: fmtErr,
 					}
 					return
 				}
 				defer os.RemoveAll(tmpDir)
 				tmpGopFile := filepath.Join(tmpDir, "prog.gop")
 				if err = os.WriteFile(tmpGopFile, in, 0644); err != nil {
-					res = &FmtResponse{
-						Body:  "",
-						Error: err.Error(),
+					fmtErr:=ExtractErrorInfo(err.Error())
+					res=&FormatResponse{
+						Body: "",
+						Error: fmtErr,
 					}
 					return
 				}
@@ -246,9 +256,10 @@ func (p *Project) CodeFmt(ctx context.Context, body, fiximport string) (res *Fmt
 				var fmtErr []byte
 				fmtErr, err = cmd.Output()
 				if err != nil {
-					res = &FmtResponse{
-						Body:  "",
-						Error: strings.Replace(string(fmtErr), tmpGopFile, "prog.gop", -1),
+					fmtErr:=ExtractErrorInfo(strings.Replace(string(fmtErr), tmpGopFile, "prog.gop", -1))
+					res=&FormatResponse{
+						Body: "",
+						Error: fmtErr,
 					}
 					return
 				}
@@ -264,28 +275,30 @@ func (p *Project) CodeFmt(ctx context.Context, body, fiximport string) (res *Fmt
 					// the error with the file path. So, do it ourselves here.
 					errMsg = fmt.Sprintf("%v:%v", f, errMsg)
 				}
-				res = &FmtResponse{
-					Body:  "",
-					Error: errMsg,
-				}
-				return
+				fmtErr:=ExtractErrorInfo(errMsg)
+					res=&FormatResponse{
+						Body: "",
+						Error: fmtErr,
+					}
+					return
 			}
 			fs.AddFile(f, out)
 		case path.Base(f) == "go.mod":
 			out, err := formatGoMod(f, fs.Data(f))
 			if err != nil {
-				res = &FmtResponse{
-					Body:  "",
-					Error: err.Error(),
-				}
-				return
+				fmtErr:=ExtractErrorInfo(err.Error())
+					res=&FormatResponse{
+						Body: "",
+						Error: fmtErr,
+					}
+					return
 			}
 			fs.AddFile(f, out)
 		}
 	}
-	res = &FmtResponse{
-		Body:  string(fs.Format()),
-		Error: "",
+	res=&FormatResponse{
+		Body: string(fs.Format()),
+		Error: FormatError{},
 	}
 	return
 }

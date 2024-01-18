@@ -21,6 +21,8 @@ get "/project/:id", ctx => {
 }
 
 get "/asset/:id", ctx => {
+    ctx.ResponseWriter.Header().Set("Access-Control-Allow-Origin", "*")
+	ctx.ResponseWriter.Header().Set("Content-Type", "application/json")
     id := ctx.param("id")
     asset, _ := p.Asset(todo, id)
     ctx.json {
@@ -31,6 +33,8 @@ get "/asset/:id", ctx => {
 }
 
 get "/list/asset/:pageIndex/:pageSize/:assetType", ctx => {
+    ctx.ResponseWriter.Header().Set("Access-Control-Allow-Origin", "*")
+	ctx.ResponseWriter.Header().Set("Content-Type", "application/json")
     pageIndex := ctx.param("pageIndex")
     pageSize := ctx.param("pageSize")
     assetType := ctx.param("assetType")

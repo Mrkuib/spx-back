@@ -35,16 +35,16 @@ type Config struct {
 }
 
 type Asset struct {
-	ID        string
-	Name      string
-	AuthorId  string
-	Category  string
-	IsPublic  int
-	Address   string
-	AssetType string
-	Status    int
-	CTime     time.Time
-	UTime     time.Time
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	AuthorId  string    `json:"authorId"`
+	Category  string    `json:"category"`
+	IsPublic  int       `json:"isPublic"`
+	Address   string    `json:"address"`
+	AssetType string    `json:"assetType"`
+	Status    int       `json:"status"`
+	CTime     time.Time `json:"cTime"`
+	UTime     time.Time `json:"uTime"`
 }
 
 type CodeFile struct {
@@ -65,8 +65,6 @@ type FmtResponse struct {
 	Body  string
 	Error string
 }
-
-
 
 func New(ctx context.Context, conf *Config) (ret *Project, err error) {
 	_ = godotenv.Load("../.env")
@@ -119,26 +117,34 @@ func (p *Project) FileInfo(ctx context.Context, id string) (*CodeFile, error) {
 
 // Asset returns an Asset.
 func (p *Project) Asset(ctx context.Context, id string) (*Asset, error) {
-	asset, err := common.QuerySelectById[Asset](p.db, id)
+	asset, err := common.QueryById[Asset](p.db, id)
 	if err != nil {
 		return nil, err
 	}
-	err = p.modifyAddress(&asset.Address)
+	if asset == nil {
+		return nil, err
+	}
+	modifiedAddress, err := p.modifyAddress(asset.Address)
 	if err != nil {
 		return nil, err
 	}
+	asset.Address = modifiedAddress
+
 	return asset, nil
 }
 
 // AssetList list assets
 func (p *Project) AssetList(ctx context.Context, pageIndex string, pageSize string, assetType string) (*common.Pagination[Asset], error) {
-	wheres := map[string]interface{}{"asset_type": assetType}
+	wheres := []common.FilterCondition{
+		{Column: "asset_type", Operation: "=", Value: assetType},
+	}
 	pagination, err := common.QueryByPage[Asset](p.db, pageIndex, pageSize, wheres)
-	for i := range pagination.Data {
-		err := p.modifyAddress(&pagination.Data[i].Address)
+	for i, asset := range pagination.Data {
+		modifiedAddress, err := p.modifyAddress(asset.Address)
 		if err != nil {
 			return nil, err
 		}
+		pagination.Data[i].Address = modifiedAddress
 	}
 	if err != nil {
 		return nil, err
@@ -147,26 +153,26 @@ func (p *Project) AssetList(ctx context.Context, pageIndex string, pageSize stri
 }
 
 // modifyAddress transfers relative path to download url
-func (p *Project) modifyAddress(address *string) error {
+func (p *Project) modifyAddress(address string) (string, error) {
 	var data struct {
 		Assets    map[string]string `json:"assets"`
 		IndexJson string            `json:"indexJson"`
 	}
-	if err := json.Unmarshal([]byte(*address), &data); err != nil {
-		return err
+	if err := json.Unmarshal([]byte(address), &data); err != nil {
+		return "", err
 	}
+	qiniuPath := os.Getenv("QINIU_PATH") // TODO: Replace with real URL prefix
 	for key, value := range data.Assets {
-		data.Assets[key] = os.Getenv("QINIU_PATH") + value // TODO: Replace with real URL prefix
+		data.Assets[key] = qiniuPath + value
 	}
 	if data.IndexJson != "" {
-		data.IndexJson = os.Getenv("QINIU_PATH") + data.IndexJson
+		data.IndexJson = qiniuPath + data.IndexJson
 	}
 	modifiedAddress, err := json.Marshal(data)
 	if err != nil {
-		return err
+		return "", err
 	}
-	*address = string(modifiedAddress)
-	return nil
+	return string(modifiedAddress), nil
 }
 
 func (p *Project) SaveProject(ctx context.Context, codeFile *CodeFile, file multipart.File, header *multipart.FileHeader) (*CodeFile, error) {
@@ -193,13 +199,12 @@ func (p *Project) SaveProject(ctx context.Context, codeFile *CodeFile, file mult
 	}
 }
 
+func (p *Project) CodeFmt(ctx context.Context, body, fiximport string) (res *FmtResponse) {
 
-func (p *Project)CodeFmt(ctx context.Context,body,fiximport string) (res *FmtResponse){
-	
 	fs, err := splitFiles([]byte(body))
 	if err != nil {
-		res=&FmtResponse{
-			Body: "",
+		res = &FmtResponse{
+			Body:  "",
 			Error: err.Error(),
 		}
 		return
@@ -220,8 +225,8 @@ func (p *Project)CodeFmt(ctx context.Context,body,fiximport string) (res *FmtRes
 				var tmpDir string
 				tmpDir, err = os.MkdirTemp("", "gopformat")
 				if err != nil {
-					res=&FmtResponse{
-						Body: "",
+					res = &FmtResponse{
+						Body:  "",
 						Error: err.Error(),
 					}
 					return
@@ -229,8 +234,8 @@ func (p *Project)CodeFmt(ctx context.Context,body,fiximport string) (res *FmtRes
 				defer os.RemoveAll(tmpDir)
 				tmpGopFile := filepath.Join(tmpDir, "prog.gop")
 				if err = os.WriteFile(tmpGopFile, in, 0644); err != nil {
-					res=&FmtResponse{
-						Body: "",
+					res = &FmtResponse{
+						Body:  "",
 						Error: err.Error(),
 					}
 					return
@@ -241,8 +246,8 @@ func (p *Project)CodeFmt(ctx context.Context,body,fiximport string) (res *FmtRes
 				var fmtErr []byte
 				fmtErr, err = cmd.Output()
 				if err != nil {
-					res=&FmtResponse{
-						Body: "",
+					res = &FmtResponse{
+						Body:  "",
 						Error: strings.Replace(string(fmtErr), tmpGopFile, "prog.gop", -1),
 					}
 					return
@@ -259,8 +264,8 @@ func (p *Project)CodeFmt(ctx context.Context,body,fiximport string) (res *FmtRes
 					// the error with the file path. So, do it ourselves here.
 					errMsg = fmt.Sprintf("%v:%v", f, errMsg)
 				}
-				res=&FmtResponse{
-					Body: "",
+				res = &FmtResponse{
+					Body:  "",
 					Error: errMsg,
 				}
 				return
@@ -269,8 +274,8 @@ func (p *Project)CodeFmt(ctx context.Context,body,fiximport string) (res *FmtRes
 		case path.Base(f) == "go.mod":
 			out, err := formatGoMod(f, fs.Data(f))
 			if err != nil {
-				res=&FmtResponse{
-					Body: "",
+				res = &FmtResponse{
+					Body:  "",
 					Error: err.Error(),
 				}
 				return
@@ -278,8 +283,8 @@ func (p *Project)CodeFmt(ctx context.Context,body,fiximport string) (res *FmtRes
 			fs.AddFile(f, out)
 		}
 	}
-	res=&FmtResponse{
-		Body: string(fs.Format()),
+	res = &FmtResponse{
+		Body:  string(fs.Format()),
 		Error: "",
 	}
 	return

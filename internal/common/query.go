@@ -9,6 +9,12 @@ import (
 	"strings"
 )
 
+type FilterCondition struct {
+	Column    string      // 列名
+	Operation string      // 操作符，如 "=", "<", "!=" ...
+	Value     interface{} // 值
+}
+
 type Pagination[T any] struct {
 	TotalCount int
 	TotalPage  int
@@ -16,52 +22,29 @@ type Pagination[T any] struct {
 }
 
 // QueryByPage 通用的 分页查询
-func QueryByPage[T any](db *sql.DB, pageIndexParam string, pageSizeParam string, filters map[string]interface{}) (*Pagination[T], error) {
-	// 转换string --> int
+func QueryByPage[T any](db *sql.DB, pageIndexParam string, pageSizeParam string, filters []FilterCondition) (*Pagination[T], error) {
 	pageIndex, err := strconv.Atoi(pageIndexParam)
 	if err != nil {
 		return nil, err
 	}
 	pageSize, err := strconv.Atoi(pageSizeParam)
-
 	if err != nil {
 		return nil, err
 	}
+	tableName := getTableName[T]()
+	scan := tScan[T]()
+	whereClause, args := buildWhereClause(filters)
 
-	// 根据T获取tableName
-	tableName := strings.ToLower(reflect.TypeOf((*T)(nil)).Elem().Name())
-
-	// 创建Scan
-	scan := TScan[T]()
-
-	// 构建 WHERE
-	var whereClauses []string
-	var args []interface{}
-	for col, val := range filters {
-		whereClauses = append(whereClauses, fmt.Sprintf("%s = ?", col))
-		args = append(args, val)
-	}
-	whereClause := ""
-	if len(whereClauses) > 0 {
-		whereClause = " WHERE " + strings.Join(whereClauses, " AND ")
-	}
-
-	// 计算开始获取记录的位置
-	offset := (pageIndex - 1) * pageSize
-
-	// 查询总记录数
 	var totalCount int
 	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s`, tableName, whereClause)
-	argsForCount := append([]interface{}{}, args...) // 复制 args 用于总数查询
+	argsForCount := append([]interface{}{}, args...)
 	err = db.QueryRow(countQuery, argsForCount...).Scan(&totalCount)
 	if err != nil {
 		return nil, err
 	}
-
-	// 计算总页数
 	totalPage := (totalCount + pageSize - 1) / pageSize
 
-	// 执行分页查询
+	offset := (pageIndex - 1) * pageSize
 	query := fmt.Sprintf("SELECT * FROM %s%s LIMIT ?, ?", tableName, whereClause)
 	argsForQuery := append(args, offset, pageSize) // 添加 LIMIT 参数
 	rows, err := db.Query(query, argsForQuery...)
@@ -85,9 +68,12 @@ func QueryByPage[T any](db *sql.DB, pageIndexParam string, pageSizeParam string,
 	}, nil
 }
 
-// QuerySelectById 通用的 SELECT 查询，唯一查询条件为id
-func QuerySelectById[T any](db *sql.DB, id string) (*T, error) {
-	wheres := map[string]interface{}{"id": id}
+// QueryById 通用的 SELECT 查询，唯一查询条件为id
+func QueryById[T any](db *sql.DB, id string) (*T, error) {
+	wheres := []FilterCondition{
+		{Column: "id", Operation: "=", Value: id},
+		{Column: "status", Operation: "!=", Value: 0},
+	}
 	results, err := QuerySelect[T](db, wheres)
 	if len(results) == 0 {
 		return nil, err
@@ -96,26 +82,11 @@ func QuerySelectById[T any](db *sql.DB, id string) (*T, error) {
 }
 
 // QuerySelect 通用的 SELECT 查询，可以自定义查询条件
-func QuerySelect[T any](db *sql.DB, filters map[string]interface{}) ([]T, error) {
-	// 根据 T 获取表名
-	tableName := strings.ToLower(reflect.TypeOf((*T)(nil)).Elem().Name())
+func QuerySelect[T any](db *sql.DB, filters []FilterCondition) ([]T, error) {
+	tableName := getTableName[T]()
+	scan := tScan[T]()
+	whereClause, args := buildWhereClause(filters)
 
-	// 创建 Scan 函数
-	scan := TScan[T]()
-
-	// 构建 WHERE 子句
-	var whereClauses []string
-	var args []interface{}
-	for col, val := range filters {
-		whereClauses = append(whereClauses, fmt.Sprintf("%s = ?", col))
-		args = append(args, val)
-	}
-	whereClause := ""
-	if len(whereClauses) > 0 {
-		whereClause = " WHERE " + strings.Join(whereClauses, " AND ")
-	}
-
-	// 执行 SELECT 查询
 	query := fmt.Sprintf("SELECT * FROM %s%s", tableName, whereClause)
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -123,7 +94,6 @@ func QuerySelect[T any](db *sql.DB, filters map[string]interface{}) ([]T, error)
 	}
 	defer rows.Close()
 
-	// 读取结果
 	var results []T
 	for rows.Next() {
 		item, err := scan(rows)
@@ -136,8 +106,8 @@ func QuerySelect[T any](db *sql.DB, filters map[string]interface{}) ([]T, error)
 	return results, nil
 }
 
-// TScan 创建并返回一个适用于 任意结构体 的Scan
-func TScan[T any]() func(rows *sql.Rows) (T, error) {
+// tScan 创建并返回一个适用于 任意结构体 的Scan
+func tScan[T any]() func(rows *sql.Rows) (T, error) {
 	return func(rows *sql.Rows) (T, error) {
 		var item T
 		itemVal := reflect.ValueOf(&item).Elem()
@@ -169,4 +139,27 @@ func TScan[T any]() func(rows *sql.Rows) (T, error) {
 
 		return item, nil
 	}
+}
+
+// buildWhereClause 根据 FilterCondition 构建 WHERE 子句
+func buildWhereClause(conditions []FilterCondition) (string, []interface{}) {
+	var whereClauses []string
+	var args []interface{}
+
+	for _, condition := range conditions {
+		whereClauses = append(whereClauses, fmt.Sprintf("%s %s ?", condition.Column, condition.Operation))
+		args = append(args, condition.Value)
+	}
+
+	whereClause := ""
+	if len(whereClauses) > 0 {
+		whereClause = " WHERE " + strings.Join(whereClauses, " AND ") // TODO 支持OR操作
+	}
+
+	return whereClause, args
+}
+
+// getTableName 基于反射获取表名
+func getTableName[T any]() string {
+	return strings.ToLower(reflect.TypeOf((*T)(nil)).Elem().Name())
 }

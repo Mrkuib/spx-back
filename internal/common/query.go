@@ -70,10 +70,7 @@ func QueryByPage[T any](db *sql.DB, pageIndexParam string, pageSizeParam string,
 
 // QueryById 通用的 SELECT 查询，唯一查询条件为id
 func QueryById[T any](db *sql.DB, id string) (*T, error) {
-	wheres := []FilterCondition{
-		{Column: "id", Operation: "=", Value: id},
-		{Column: "status", Operation: "!=", Value: 0},
-	}
+	wheres := []FilterCondition{{Column: "id", Operation: "=", Value: id}}
 	results, err := QuerySelect[T](db, wheres)
 	if len(results) == 0 {
 		return nil, err
@@ -150,6 +147,10 @@ func buildWhereClause(conditions []FilterCondition) (string, []interface{}) {
 		whereClauses = append(whereClauses, fmt.Sprintf("%s %s ?", condition.Column, condition.Operation))
 		args = append(args, condition.Value)
 	}
+
+	// select undelete result
+	whereClauses = append(whereClauses, "status != ?")
+	args = append(args, 0)
 
 	whereClause := ""
 	if len(whereClauses) > 0 {
